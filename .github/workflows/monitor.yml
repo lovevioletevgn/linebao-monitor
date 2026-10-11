@@ -1,0 +1,59 @@
+name: 线报监测
+
+on:
+  schedule:
+    # 每 30 分钟一次。注意：GitHub 的 cron 用 UTC，且高峰期可能延迟 5~15 分钟。
+    - cron: "*/30 * * * *"
+  workflow_dispatch:          # 支持在仓库网页上手动点一下立即运行（调试用）
+
+permissions:
+  contents: read
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest     # 境外服务器 —— 直连 Telegram，无需代理
+    timeout-minutes: 10
+
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 准备 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: 安装依赖
+        run: pip install -r requirements.txt
+
+      # runner 是无状态的，用 cache 把去重库带过来/存回去，
+      # 否则每轮都会把旧线报当新的重推一遍。
+      - name: 恢复/保存去重库
+        uses: actions/cache@v4
+        with:
+          path: data/seen.db
+          key: seen-db-${{ github.run_id }}
+          restore-keys: |
+            seen-db-
+
+      - name: 运行监测
+        env:
+          # 飞书 Webhook 存在仓库 Secrets 里，不会出现在代码、日志或仓库历史中
+          LINEBAO_FEISHU_WEBHOOK: ${{ secrets.LINEBAO_FEISHU_WEBHOOK }}
+          LINEBAO_FEISHU_SECRET: ${{ secrets.LINEBAO_FEISHU_SECRET }}
+        run: python run.py
+
+      - name: 打印本轮结果
+        if: always()
+        run: |
+          echo "=== 最近一次运行结果 ==="
+          python -c "
+          import os
+          p='data/run.log'
+          if os.path.exists(p):
+              for l in open(p, encoding='utf-8', errors='replace').read().splitlines()[-6:]:
+                  print(l)
+          else:
+              print('(无 run.log，main.py 直接输出在上方)')
+          "

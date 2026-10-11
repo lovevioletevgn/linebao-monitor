@@ -1,0 +1,148 @@
+# ============================================================
+# 线报监测助手 · 配置文件
+# ============================================================
+# 改完这个文件直接重跑即可，不需要动代码。
+# ============================================================
+
+# ---------- 信息源 ----------
+# 当前策略（2026-10-11 按博士要求调整）：
+#   **只启用 Telegram 真线报源**，其余折扣源全部停用。
+#   原因：聚合站发的是「打折商品」，会把「0.01 / 免费」这类真羊毛淹没掉。
+#   停用的源配置都保留着，想开回来把 enabled 改成 true 即可。
+sources:
+  # [A] RSS 源（已全部停用）
+  rss:
+    - name: "没得比·最新"
+      url: "https://www.meidebi.com/Rss/rss/type/new.html"
+      enabled: false
+    - name: "没得比·精选"
+      url: "https://www.meidebi.com/Rss/rss/type/hot.html"
+      enabled: false
+    - name: "没得比·国内"
+      url: "https://www.meidebi.com/Rss/rss/type/guonei.html"
+      enabled: false
+    - name: "没得比·猫实惠"
+      url: "https://www.meidebi.com/Rss/rss/type/mao.html"
+      enabled: false
+    - name: "什么值得买·原创"
+      url: "https://post.smzdm.com/feed"
+      enabled: false
+    - name: "V2EX·优惠信息"
+      url: "https://www.v2ex.com/feed/deals.xml"
+      enabled: false
+
+  # [B] 网页源（已停用）
+  # price_selector 可选：命中后价格会被解析成数字，供 max_price 过滤使用
+  web:
+    - name: "什么值得买·精品好价"
+      url: "https://www.smzdm.com/jingxuan/"
+      item_selector: "li.feed-row-wide"
+      title_selector: "h5.feed-block-title a"
+      link_selector: "h5.feed-block-title a"
+      price_selector: ".z-highlight"
+      enabled: false
+
+    # 自定义网页源的写法示例（F12 找 selector）：
+    # - name: "某线报聚合站"
+    #   url: "https://example.com/latest"
+    #   item_selector: "ul.news-list > li"
+    #   title_selector: "a.title"
+    #   link_selector: "a.title"
+    #   time_selector: "span.time"
+    #   enabled: true
+
+  # [C] Telegram 公开频道 —— 真·线报群（当前唯一启用的源）
+  # channel 填频道用户名（不带 @）；必须配好 .env 里的 LINEBAO_PROXY 才能访问
+  telegram:
+    - name: "今日有羊毛"
+      channel: "jdbroo"
+      enabled: true
+    # 私密频道，公开预览页读不到内容（t.me/s/ 为空），先留档停用
+    - name: "鹿毛自由"
+      channel: "lumaofree"
+      enabled: false
+
+# ---------- 过滤规则 ----------
+filters:
+  # 命中任意一个「包含词」才推送（留空 = 全部推送，会刷屏）
+  # 两种写法：
+  #   普通词   -> 子串匹配，如 "免费"
+  #   /正则/   -> 正则匹配，如 "/0\.01|1分/"（精确匹配，避免 "31元" 被 "1元" 误命中）
+  #
+  # ⚠️ Telegram 线报源会跳过这里的「包含词」检查（内容本身就是线报，
+  #    再筛会误杀），但仍受「排除词」和「价格上限」约束。
+  include_keywords:
+    - "免费"
+    - "0元"
+    - "白嫖"
+    - "一分钱"
+    - "1分购"
+    - "/0\\.0?1\\s*元/"
+    - "优惠券"
+    - "神券"
+    - "满减"
+    - "秒杀"
+    - "限量"
+    - "试用"
+    - "补贴"
+    - "福利"
+    - "捡漏"
+
+  # 命中任意一个「排除词」直接丢弃
+  exclude_keywords:
+    - "招聘"
+    - "课程"
+    - "广告"
+    - "培训"
+    - "理财"
+    - "贷款"
+    - "免费加工"     # 配镜服务，不是免费商品
+    - "免费安装"     # 安装服务，不是免费商品
+    - "免费维修"
+    - "免费领取资料"
+
+  # 价格上限：能解析出价格时，超过该值不推。0 = 不过滤
+  # 想只看「捡漏价」可以设成 9.9
+  max_price: 0
+
+# ---------- 推送通道 ----------
+notify:
+  channels:
+    # 控制台：永远开着，方便本机调试
+    - type: "console"
+      enabled: true
+
+    # 本地网页预览：生成 data/preview.html，直接浏览器打开就能看
+    - type: "html"
+      enabled: true
+      output: "data/preview.html"
+
+    # PushPlus（最省事：微信扫码拿 token，线报直接推到微信）
+    # 拿 token：https://www.pushplus.plus/ 微信扫码登录 -> 复制 token
+    - type: "pushplus"
+      enabled: false
+      token: ""
+
+    # 飞书群机器人
+    # webhook 从 .env 的 LINEBAO_FEISHU_WEBHOOK 读取（已配好，勿把密钥写这里）
+    - type: "feishu"
+      enabled: true
+      webhook: ""
+      secret: ""
+
+    # 企业微信群机器人
+    - type: "wecom"
+      enabled: false
+      webhook: ""
+
+# ---------- 运行参数 ----------
+runtime:
+  # 访问境外源（Telegram 等）用的代理。
+  # 留空 = 不使用；实际推荐用环境变量 LINEBAO_PROXY（见 .env）。
+  # 国内站会自动直连，不走代理。
+  proxy: ""
+  max_push_per_run: 20      # 每轮最多推几条，防止刷屏
+  timeout: 15               # 单次请求超时(秒)
+  request_delay: 1.0        # 每个源之间的间隔(秒)，别打太快
+  db_path: "data/seen.db"   # 去重数据库
+  log_level: "INFO"         # DEBUG / INFO / WARNING
